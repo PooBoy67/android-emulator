@@ -876,6 +876,37 @@ jobs:
         run: |
           sed -i 's/if (TVHelper.isSAFSupported(requireContext())) {/if (false) {/' Lemuroid/lemuroid-app/src/main/java/com/swordfish/lemuroid/app/tv/home/TVHomeFragment.kt
 
+      - name: Allow reading all files on TV
+        run: |
+          python3 - <<'PY'
+          R = "Lemuroid/lemuroid-app/src/main/"
+          m = R + "AndroidManifest.xml"
+          s = open(m).read()
+          a = '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />'
+          assert a in s
+          s = s.replace(a, a + '\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />', 1)
+          open(m, "w").write(s)
+          t = R + "java/com/swordfish/lemuroid/app/tv/main/MainTVActivity.kt"
+          s = open(t).read()
+          a = "    private fun ensureLegacyStoragePermissionsIfNeeded() {\n"
+          assert a in s
+          new = a + """        if (android.os.Build.VERSION.SDK_INT >= 30 && !android.os.Environment.isExternalStorageManager()) {
+                      try {
+                          startActivity(
+                              Intent(
+                                  android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                  android.net.Uri.parse("package:" + packageName),
+                              ),
+                          )
+                      } catch (e: Exception) {
+                          android.widget.Toast.makeText(this, "All files access screen not found on this TV", android.widget.Toast.LENGTH_LONG).show()
+                      }
+                      return
+                  }
+          """
+          open(t, "w").write(s.replace(a, new, 1))
+          PY
+          
       - name: Build APK
         working-directory: Lemuroid
         run: |
