@@ -872,6 +872,10 @@ jobs:
       - name: Apply TV Pad changes
         run: python3 patch.py Lemuroid
 
+      - name: Use built-in TV folder picker
+        run: |
+          sed -i 's/if (TVHelper.isSAFSupported(requireContext())) {/if (false) {/' Lemuroid/lemuroid-app/src/main/java/com/swordfish/lemuroid/app/tv/home/TVHomeFragment.kt
+
       - name: Build APK
         working-directory: Lemuroid
         run: |
