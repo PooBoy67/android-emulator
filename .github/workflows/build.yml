@@ -913,6 +913,68 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleFreeBundleDebug --no-daemon --stacktrace
 
+      - name: Add joystick to phone pad
+        run: |
+          python3 - <<'PY'
+          D = "Lemuroid/lemuroid-app/src/main/java/com/swordfish/lemuroid/app/shared/remotepad/"
+          def edit(path, old, new):
+              s = open(path).read()
+              assert old in s, "anchor missing: " + old[:50]
+              open(path, "w").write(s.replace(old, new, 1))
+          V = D + "PadView.kt"
+          edit(V, "    private val firedCmd = HashMap<Int, String>() // pointerId -> cmd already fired\n",
+                  "    private val firedCmd = HashMap<Int, String>() // pointerId -> cmd already fired\n"
+                  "    var stickMode = true\n"
+                  "    private var stickPointer = -1\n"
+                  "    private var knobX = 0f\n"
+                  "    private var knobY = 0f\n"
+                  "    fun toggleStick() { stickMode = !stickMode; persist(); invalidate() }\n")
+          edit(V, 'saveLayout(elts.joinToString(";") { "${it.id}=${it.x},${it.y},${it.s},${if (it.visible) 1 else 0}" })',
+                  'saveLayout(elts.joinToString(";") { "${it.id}=${it.x},${it.y},${it.s},${if (it.visible) 1 else 0}" } + ";stick=" + (if (stickMode) 1 else 0))')
+          edit(V, '                val n = v.split(",")\n',
+                  '                if (id == "stick") { stickMode = v == "1"; return@forEach }\n                val n = v.split(",")\n')
+          edit(V, "Kind.DPAD -> drawDpad(c, e, d)", "Kind.DPAD -> if (stickMode) drawStick(c, e, d) else drawDpad(c, e, d)")
+          edit(V, "    private fun drawDpad(c: Canvas, e: Elt, d: Float) {",
+                  "    private fun drawStick(c: Canvas, e: Elt, d: Float) {\n"
+                  "        val x = cx(e); val y = cy(e); val r = d / 2f\n"
+                  "        c.drawCircle(x, y, r, fill); c.drawCircle(x, y, r, stroke)\n"
+                  "        fill.color = if (dpadX != 0f || dpadY != 0f) Color.argb(255, 120, 170, 255) else Color.argb(255, 95, 99, 128)\n"
+                  "        c.drawCircle(x + knobX, y + knobY, r * 0.38f, fill)\n"
+                  "    }\n\n"
+                  "    private fun drawDpad(c: Canvas, e: Elt, d: Float) {")
+          edit(V, "            val e = nearest(px, py)\n            if (e != null && e.kind == Kind.CMD) {",
+                  "            val e = nearest(px, py)\n            if (stickMode && e != null && e.kind == Kind.DPAD) stickPointer = ev.getPointerId(i)\n            if (e != null && e.kind == Kind.CMD) {")
+          edit(V, "            firedCmd.remove(ev.getPointerId(ev.actionIndex))\n",
+                  "            firedCmd.remove(ev.getPointerId(ev.actionIndex))\n"
+                  "            if (action == MotionEvent.ACTION_CANCEL || ev.getPointerId(ev.actionIndex) == stickPointer) stickPointer = -1\n")
+          edit(V, "        var nx = 0f; var ny = 0f\n", "        var nx = 0f; var ny = 0f\n        var stickActive = false\n")
+          edit(V, "            val e = nearest(px, py) ?: continue\n            when (e.kind) {",
+                  "            if (stickMode && ev.getPointerId(i) == stickPointer) {\n"
+                  "                val de = elts.first { it.kind == Kind.DPAD }\n"
+                  "                val sx = px - cx(de); val sy = py - cy(de)\n"
+                  "                val dist = hypot(sx, sy)\n"
+                  "                val rad = dia(de) / 2f\n"
+                  "                if (dist > rad * 0.2f) {\n"
+                  "                    val ux = sx / dist; val uy = sy / dist\n"
+                  "                    if (ux < -0.38f) nx = -1f else if (ux > 0.38f) nx = 1f\n"
+                  "                    if (uy < -0.38f) ny = -1f else if (uy > 0.38f) ny = 1f\n"
+                  "                    newPressed += \"dpad\"\n"
+                  "                }\n"
+                  "                if (dist > 0f) { val kk = min(dist, rad * 0.6f); knobX = sx / dist * kk; knobY = sy / dist * kk }\n"
+                  "                stickActive = true\n"
+                  "                continue\n"
+                  "            }\n"
+                  "            val e = nearest(px, py) ?: continue\n"
+                  "            if (stickMode && e.kind == Kind.DPAD) continue\n"
+                  "            when (e.kind) {")
+          edit(V, '        for (k in newKeys - heldKeys) send("K $k 1")\n',
+                  '        if (!stickActive) { knobX = 0f; knobY = 0f }\n        for (k in newKeys - heldKeys) send("K $k 1")\n')
+          A = D + "PadActivity.kt"
+          edit(A, "2 -> { disconnect(); showConnectScreen() }", "3 -> { disconnect(); showConnectScreen() }")
+          edit(A, "1 -> p.resetLayout()", "1 -> p.toggleStick()\n                    2 -> p.resetLayout()")
+          edit(A, 'arrayOf("Edit button layout", "Reset layout", "Disconnect")', 'arrayOf("Edit button layout", "Switch joystick / D-pad", "Reset layout", "Disconnect")')
+          PY
+
       - name: Collect APK
         run: |
           APK=$(find Lemuroid/lemuroid-app/build/outputs/apk -name '*.apk' | head -n 1)
