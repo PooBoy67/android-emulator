@@ -980,7 +980,11 @@ jobs:
           APK=$(find Lemuroid/lemuroid-app/build/outputs/apk -name '*.apk' | head -n 1)
           echo "Found: $APK"
           cp "$APK" TV-Pad.apk
-
+          
+      - name: Build APK again with joystick
+        working-directory: Lemuroid
+        run: ./gradlew assembleFreeBundleDebug --no-daemon --stacktrace
+        
       - uses: actions/upload-artifact@v4
         with:
           name: TV-Pad
