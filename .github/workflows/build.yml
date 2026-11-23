@@ -975,6 +975,34 @@ jobs:
           edit(A, 'arrayOf("Edit button layout", "Reset layout", "Disconnect")', 'arrayOf("Edit button layout", "Switch joystick / D-pad", "Reset layout", "Disconnect")')
           PY
 
+      - name: Open TV screen on TVs
+        run: |
+          python3 - <<'PY'
+          p = "Lemuroid/lemuroid-app/src/main/java/com/swordfish/lemuroid/app/mobile/feature/main/MainActivity.kt"
+          s = open(p).read()
+          a = "        super.onCreate(savedInstanceState)\n\n        GlobalScope.safeLaunch {"
+          assert a in s, "anchor missing"
+          lines = [
+              "        super.onCreate(savedInstanceState)",
+              "",
+              "        val pm = packageManager",
+              "        val onTv =",
+              "            pm.hasSystemFeature(\"android.hardware.type.television\") ||",
+              "                pm.hasSystemFeature(\"android.software.leanback\") ||",
+              "                !pm.hasSystemFeature(\"android.hardware.touchscreen\") ||",
+              "                (getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager)",
+              "                    ?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION",
+              "        if (onTv) {",
+              "            startActivity(Intent(this, com.swordfish.lemuroid.app.tv.main.MainTVActivity::class.java))",
+              "            finish()",
+              "            return",
+              "        }",
+              "",
+              "        GlobalScope.safeLaunch {",
+          ]
+          open(p, "w").write(s.replace(a, "\n".join(lines), 1))
+          PY
+
       - name: Collect APK
         run: |
           APK=$(find Lemuroid/lemuroid-app/build/outputs/apk -name '*.apk' | head -n 1)
